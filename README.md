@@ -1,6 +1,9 @@
 # baresip Zig Wrapper
 
-This wrapper builds upstream `baresip` as a shared library (`libbaresip.so`) via `zig build`.
+This wrapper builds:
+
+- upstream `baresip` as shared library (`libbaresip.so`)
+- runtime C-ABI helper `libbaresip_wrapper.so` (dlopen-based thin API layer)
 
 The wrapper also builds upstream `re` (libre) as a static dependency to avoid external
 `libre.so` runtime dependency.
@@ -26,6 +29,12 @@ Build for current target:
 zig build -Doptimize=ReleaseFast
 ```
 
+Build only the C-ABI helper (skip upstream core build):
+
+```bash
+zig build -Dffi_only=true -Doptimize=ReleaseFast
+```
+
 Build for all supported targets:
 
 ```bash
@@ -35,7 +44,9 @@ zig build -Dall=true -Doptimize=ReleaseFast
 Single-target output:
 
 - `zig-out/lib/libbaresip.so`
+- `zig-out/lib/libbaresip_wrapper.so`
 - `zig-out/include/baresip/baresip.h`
+- `zig-out/include/baresip_wrapper.h`
 
 `-Dall=true` output:
 
@@ -46,3 +57,12 @@ Single-target output:
 
 - Wrapper builds `baresip` with `MODULES=""` for minimal/core shared library output.
 - `re` is built static (`libre.a`) and linked into `libbaresip.so`.
+
+## Wrapper API Coverage
+
+`baresip_wrapper.h` exposes C-ABI helpers for:
+
+- Lifecycle (`init`, async `re_main` run, `stop`, running state, loop error).
+- SIP UA operations (`add_ua`, optional register, `connect_call`, `answer_call`, `hangup_call`).
+- Runtime module loading (`module_load` when symbol is available).
+- Event bridge via `bevent_register` (`bsw_set_event_callback` with `event/ua/call/text` payload).

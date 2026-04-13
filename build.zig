@@ -86,7 +86,7 @@ fn addMbedtlsBuild(
         "-DCMAKE_C_FLAGS=-DMBEDTLS_SSL_DTLS_SRTP",
         "-DENABLE_TESTING=OFF",
         "-DENABLE_PROGRAMS=OFF",
-        "-DGEN_FILES=OFF",
+        "-DGEN_FILES=ON",
         "-DMBEDTLS_FATAL_WARNINGS=OFF",
         "-DUSE_SHARED_MBEDTLS_LIBRARY=ON",
         "-DUSE_STATIC_MBEDTLS_LIBRARY=OFF",
@@ -291,6 +291,36 @@ fn addBaresipSharedBuild(
     return install_lib;
 }
 
+fn addBaresipWrapperBuild(
+    b: *std.Build,
+    target: std.Build.ResolvedTarget,
+    optimize: std.builtin.OptimizeMode,
+    wrapper_name: []const u8,
+) *std.Build.Step.InstallArtifact {
+    const wrapper = b.addLibrary(.{
+        .name = wrapper_name,
+        .linkage = .dynamic,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/main.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+
+    wrapper.linkLibC();
+    wrapper.linkSystemLibrary("dl");
+    wrapper.linkSystemLibrary("pthread");
+    wrapper.addCSourceFile(.{
+        .file = b.path("src/baresip_wrapper.c"),
+        .flags = &.{ "-std=c11", "-fPIC" },
+    });
+    wrapper.root_module.addIncludePath(b.path("include"));
+    wrapper.root_module.addIncludePath(b.path("vendor/baresip/include"));
+    wrapper.root_module.addIncludePath(b.path("vendor/re/include"));
+
+    return b.addInstallArtifact(wrapper, .{});
+}
+
 fn buildForTarget(
     b: *std.Build,
     target: std.Build.ResolvedTarget,
@@ -302,6 +332,8 @@ fn buildForTarget(
     const target_str = build_utils.getTargetString(target);
     const lib_name = build_utils.getLibName(std.heap.page_allocator, "baresip", target_str);
     const install_lib = addBaresipSharedBuild(b, target, optimize, lib_name);
+    const wrapper_name = build_utils.getLibName(std.heap.page_allocator, "baresip_wrapper", target_str);
+    const install_wrapper = addBaresipWrapperBuild(b, target, optimize, wrapper_name);
 
     const hash_step = build_utils.HashAndMoveStep.create(
         b,
@@ -311,6 +343,7 @@ fn buildForTarget(
         hashes,
     );
     hash_step.step.dependOn(&install_lib.step);
+    hash_step.step.dependOn(&install_wrapper.step);
 
     json_step.step.dependOn(&hash_step.step);
 }
@@ -321,6 +354,19 @@ pub fn build(b: *std.Build) void {
     const json_path = "current.json";
 
     const build_all = b.option(bool, "all", "Build for all supported targets") orelse false;
+    const ffi_only = b.option(bool, "ffi_only", "Build only libbaresip_wrapper (skip upstream core build)") orelse false;
+
+    if (ffi_only) {
+        const target = b.standardTargetOptions(.{});
+        const install_wrapper = addBaresipWrapperBuild(b, target, optimize, "baresip_wrapper");
+        const install_wrapper_h = b.addInstallHeaderFile(
+            b.path("include/baresip_wrapper.h"),
+            "baresip_wrapper.h",
+        );
+        b.getInstallStep().dependOn(&install_wrapper.step);
+        b.getInstallStep().dependOn(&install_wrapper_h.step);
+        return;
+    }
 
     if (build_all) {
         const hashes = build_utils.createHashMap(b);
@@ -335,12 +381,19 @@ pub fn build(b: *std.Build) void {
     } else {
         const target = b.standardTargetOptions(.{});
         const install_lib = addBaresipSharedBuild(b, target, optimize, "baresip");
+        const install_wrapper = addBaresipWrapperBuild(b, target, optimize, "baresip_wrapper");
         const install_header = b.addInstallHeaderFile(
             b.path("vendor/baresip/include/baresip.h"),
             "baresip/baresip.h",
         );
+        const install_wrapper_h = b.addInstallHeaderFile(
+            b.path("include/baresip_wrapper.h"),
+            "baresip_wrapper.h",
+        );
 
         b.getInstallStep().dependOn(&install_lib.step);
+        b.getInstallStep().dependOn(&install_wrapper.step);
         b.getInstallStep().dependOn(&install_header.step);
+        b.getInstallStep().dependOn(&install_wrapper_h.step);
     }
 }
