@@ -80,10 +80,10 @@ fn addMbedtlsBuild(
         "-DCMAKE_SYSTEM_NAME=Linux",
         b.fmt("-DCMAKE_SYSTEM_PROCESSOR={s}", .{target_parts.arch}),
         "-DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY",
-        "-DCMAKE_C_COMPILER=zig",
-        "-DCMAKE_C_COMPILER_ARG1=cc",
+        b.fmt("-DCMAKE_C_COMPILER={s};cc", .{b.graph.zig_exe}),
         b.fmt("-DCMAKE_C_COMPILER_TARGET={s}", .{target_triple}),
-        "-DCMAKE_C_FLAGS=-DMBEDTLS_SSL_DTLS_SRTP",
+        "-DCMAKE_BUILD_WITH_INSTALL_RPATH=ON",
+        "-DCMAKE_C_FLAGS=-DMBEDTLS_SSL_DTLS_SRTP -DMBEDTLS_MD_C -DMBEDTLS_ERROR_C -DMBEDTLS_DECLARE_PRIVATE_IDENTIFIERS",
         "-DENABLE_TESTING=OFF",
         "-DENABLE_PROGRAMS=OFF",
         "-DGEN_FILES=ON",
@@ -152,10 +152,10 @@ fn addReStaticBuild(
         "-DCMAKE_SYSTEM_NAME=Linux",
         b.fmt("-DCMAKE_SYSTEM_PROCESSOR={s}", .{target_parts.arch}),
         "-DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY",
-        "-DCMAKE_C_COMPILER=zig",
-        "-DCMAKE_C_COMPILER_ARG1=cc",
+        b.fmt("-DCMAKE_C_COMPILER={s};cc", .{b.graph.zig_exe}),
         b.fmt("-DCMAKE_C_COMPILER_TARGET={s}", .{target_triple}),
-        "-DCMAKE_C_FLAGS=-DMBEDTLS_SSL_DTLS_SRTP",
+        "-DCMAKE_BUILD_WITH_INSTALL_RPATH=ON",
+        "-DCMAKE_C_FLAGS=-DMBEDTLS_SSL_DTLS_SRTP -DMBEDTLS_MD_C -DMBEDTLS_ERROR_C -DMBEDTLS_DECLARE_PRIVATE_IDENTIFIERS",
         "-DLIBRE_BUILD_SHARED=OFF",
         "-DLIBRE_BUILD_STATIC=ON",
         "-DUSE_MBEDTLS=ON",
@@ -240,13 +240,12 @@ fn addBaresipSharedBuild(
         "-DCMAKE_SYSTEM_NAME=Linux",
         b.fmt("-DCMAKE_SYSTEM_PROCESSOR={s}", .{target_parts.arch}),
         "-DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY",
-        "-DCMAKE_C_COMPILER=zig",
-        "-DCMAKE_C_COMPILER_ARG1=cc",
-        "-DCMAKE_CXX_COMPILER=zig",
-        "-DCMAKE_CXX_COMPILER_ARG1=c++",
+        b.fmt("-DCMAKE_C_COMPILER={s};cc", .{b.graph.zig_exe}),
+        b.fmt("-DCMAKE_CXX_COMPILER={s};c++", .{b.graph.zig_exe}),
         b.fmt("-DCMAKE_C_COMPILER_TARGET={s}", .{target_triple}),
         b.fmt("-DCMAKE_CXX_COMPILER_TARGET={s}", .{target_triple}),
-        "-DCMAKE_C_FLAGS=-DMBEDTLS_SSL_DTLS_SRTP",
+        "-DCMAKE_BUILD_WITH_INSTALL_RPATH=ON",
+        "-DCMAKE_C_FLAGS=-DMBEDTLS_SSL_DTLS_SRTP -DMBEDTLS_MD_C -DMBEDTLS_ERROR_C -DMBEDTLS_DECLARE_PRIVATE_IDENTIFIERS",
         "-DCMAKE_CXX_FLAGS=-DMBEDTLS_SSL_DTLS_SRTP",
         "-DMODULES=",
         b.fmt("-DRE_LIBRARY={s}", .{re_library}),
@@ -307,10 +306,10 @@ fn addBaresipWrapperBuild(
         }),
     });
 
-    wrapper.linkLibC();
-    wrapper.linkSystemLibrary("dl");
-    wrapper.linkSystemLibrary("pthread");
-    wrapper.addCSourceFile(.{
+    wrapper.root_module.link_libc = true;
+    wrapper.root_module.linkSystemLibrary("dl", .{});
+    wrapper.root_module.linkSystemLibrary("pthread", .{});
+    wrapper.root_module.addCSourceFile(.{
         .file = b.path("src/baresip_wrapper.c"),
         .flags = &.{ "-std=c11", "-fPIC" },
     });
