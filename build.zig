@@ -83,6 +83,7 @@ fn addMbedtlsBuild(
         b.fmt("-DCMAKE_C_COMPILER={s};cc", .{b.graph.zig_exe}),
         b.fmt("-DCMAKE_C_COMPILER_TARGET={s}", .{target_triple}),
         "-DCMAKE_BUILD_WITH_INSTALL_RPATH=ON",
+        "-DCMAKE_INSTALL_RPATH=$ORIGIN",
         "-DCMAKE_C_FLAGS=-DMBEDTLS_SSL_DTLS_SRTP -DMBEDTLS_MD_C -DMBEDTLS_ERROR_C -DMBEDTLS_DECLARE_PRIVATE_IDENTIFIERS",
         "-DENABLE_TESTING=OFF",
         "-DENABLE_PROGRAMS=OFF",
@@ -122,6 +123,18 @@ fn addMbedtlsBuild(
     };
 }
 
+fn addInstallLibFromMbedtls(
+    b: *std.Build,
+    mbedtls_build: MbedtlsBuild,
+    source_name: []const u8,
+    install_name: []const u8,
+) *std.Build.Step.InstallFile {
+    const source = b.fmt("{s}/lib/{s}", .{ mbedtls_build.install_dir, source_name });
+    const install = b.addInstallFileWithDir(.{ .cwd_relative = source }, .lib, install_name);
+    install.step.dependOn(mbedtls_build.install_step);
+    return install;
+}
+
 fn addReStaticBuild(
     b: *std.Build,
     target: std.Build.ResolvedTarget,
@@ -155,6 +168,7 @@ fn addReStaticBuild(
         b.fmt("-DCMAKE_C_COMPILER={s};cc", .{b.graph.zig_exe}),
         b.fmt("-DCMAKE_C_COMPILER_TARGET={s}", .{target_triple}),
         "-DCMAKE_BUILD_WITH_INSTALL_RPATH=ON",
+        "-DCMAKE_INSTALL_RPATH=$ORIGIN",
         "-DCMAKE_C_FLAGS=-DMBEDTLS_SSL_DTLS_SRTP -DMBEDTLS_MD_C -DMBEDTLS_ERROR_C -DMBEDTLS_DECLARE_PRIVATE_IDENTIFIERS",
         "-DLIBRE_BUILD_SHARED=OFF",
         "-DLIBRE_BUILD_STATIC=ON",
@@ -220,7 +234,7 @@ fn addBaresipSharedBuild(
     const mbedtls_lib_dir = b.fmt("{s}/lib", .{mbedtls_prefix});
     const mbedtls_lib = b.fmt("{s}/libmbedtls.so", .{mbedtls_lib_dir});
     const mbedtls_linker_flags = b.fmt(
-        "-DCMAKE_SHARED_LINKER_FLAGS=-L{s} -lmbedtls -lmbedx509 -lmbedcrypto",
+        "-DCMAKE_SHARED_LINKER_FLAGS=-Wl,-u,libre_init -Wl,-u,libre_close -L{s} -lmbedtls -lmbedx509 -lmbedcrypto",
         .{mbedtls_lib_dir},
     );
 
@@ -245,6 +259,7 @@ fn addBaresipSharedBuild(
         b.fmt("-DCMAKE_C_COMPILER_TARGET={s}", .{target_triple}),
         b.fmt("-DCMAKE_CXX_COMPILER_TARGET={s}", .{target_triple}),
         "-DCMAKE_BUILD_WITH_INSTALL_RPATH=ON",
+        "-DCMAKE_INSTALL_RPATH=$ORIGIN",
         "-DCMAKE_C_FLAGS=-DMBEDTLS_SSL_DTLS_SRTP -DMBEDTLS_MD_C -DMBEDTLS_ERROR_C -DMBEDTLS_DECLARE_PRIVATE_IDENTIFIERS",
         "-DCMAKE_CXX_FLAGS=-DMBEDTLS_SSL_DTLS_SRTP",
         "-DMODULES=",
@@ -286,6 +301,15 @@ fn addBaresipSharedBuild(
         installed_library_name,
     );
     install_lib.step.dependOn(&build_cmd.step);
+
+    const install_mbedtls = addInstallLibFromMbedtls(b, mbedtls_build, "libmbedtls.so.23", "libmbedtls.so.23");
+    const install_mbedx509 = addInstallLibFromMbedtls(b, mbedtls_build, "libmbedx509.so.9", "libmbedx509.so.9");
+    const install_mbedcrypto = addInstallLibFromMbedtls(b, mbedtls_build, "libmbedcrypto.so.18", "libmbedcrypto.so.18");
+    const install_tfpsacrypto = addInstallLibFromMbedtls(b, mbedtls_build, "libtfpsacrypto.so.2", "libtfpsacrypto.so.2");
+    install_lib.step.dependOn(&install_mbedtls.step);
+    install_lib.step.dependOn(&install_mbedx509.step);
+    install_lib.step.dependOn(&install_mbedcrypto.step);
+    install_lib.step.dependOn(&install_tfpsacrypto.step);
 
     return install_lib;
 }

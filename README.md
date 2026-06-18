@@ -12,7 +12,7 @@ The wrapper also builds upstream `re` (libre) as a static dependency to avoid ex
 
 Prerequisites:
 
-- Zig `0.15.2+`
+- Zig `0.16.0+`
 - `cmake` and `ninja`
 
 Initialize vendor submodules:
